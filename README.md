@@ -6,16 +6,43 @@
 - .NET 8 SDK (for local development)
 - SQL Server (local) or Docker
 
+## CI/CD Pipeline & Quality Gates
+
+This project uses **Azure DevOps** for continuous integration and deployment:
+
+- Multi-stage pipeline: Build → Test → Deploy
+- Automated unit/integration tests for backend & frontend
+- Commit-triggered builds with status checks
+
+### Pipeline Overview
+
+![Azure multi-stage CI/CD pipeline](images/azure-multi-stage-ci-pipeline.jpg)
+
+### Successful Build & Commit Status
+
+![Azure repo commit with pipeline passed](images/Azure-repo-commit-pjg.jpg)
+
+_(Note: filename seems to have typo – probably `Azure-repo-commit-pipeline-passed.jpg` – fix if needed)_
+
+### Deployment Success (CD Stage)
+
+![Azure CD deployment success](images/Azure-cd-deployment.jpg)
+
+### Tests Passed (Backend + Frontend)
+
+![Backend and frontend tests passed in pipeline](images/backend-frontend-tests-passed.jpg)
+
 ## Option 1: Run with Docker (Recommended)
 
 ### Step 1: Build and Start All Services
 
 ```powershell
-cd c:\Work\WordPress\his
+cd c:\Medical-Billing
 docker-compose -f docker/docker-compose.yml up --build
 ```
 
 This will start:
+
 - SQL Server (port 1433)
 - Keycloak (port 8080)
 - API (port 5001)
@@ -48,6 +75,7 @@ docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=YourStrong@Passw0rd" -p 1433:1433 
 ### Step 2: Update Connection String
 
 Edit `src/MedicalBilling.API/appsettings.json`:
+
 ```json
 {
   "ConnectionStrings": {
@@ -59,7 +87,7 @@ Edit `src/MedicalBilling.API/appsettings.json`:
 ### Step 3: Run Migrations
 
 ```powershell
-cd c:\Work\WordPress\his
+cd c:\Medical-Billing
 dotnet ef database update --project src/MedicalBilling.Infrastructure --startup-project src/MedicalBilling.API
 ```
 
@@ -86,7 +114,7 @@ Blazor will be available at: http://localhost:5000
 ### Run All Tests
 
 ```powershell
-cd c:\Work\WordPress\his
+cd c:\Medical-Billing
 dotnet test
 ```
 
@@ -107,10 +135,12 @@ See [azure-deployment-guide.md](docs/azure-deployment-guide.md) for detailed Azu
 ## Default Credentials
 
 **Keycloak Admin:**
+
 - Username: admin
 - Password: admin
 
 **Application Users (after Keycloak setup):**
+
 - Admin: admin/admin (full access)
 - Seller: seller1/seller123
 - User: user1/user123
@@ -157,11 +187,13 @@ docker logs medicalbilling-keycloak
 ## Production Deployment
 
 For production deployment to Azure, follow the comprehensive guide in:
+
 - [azure-deployment-guide.md](docs/azure-deployment-guide.md)
 
 ## Support
 
 For issues or questions, refer to:
+
 - [Implementation Plan](docs/implementation_plan.md)
 - [Database Architecture](docs/database-architecture.md)
 - [Walkthrough](docs/walkthrough.md)
