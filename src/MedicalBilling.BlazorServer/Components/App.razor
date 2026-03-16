@@ -1,0 +1,67 @@
+﻿@using Microsoft.AspNetCore.Authentication
+@using MedicalBilling.BlazorServer.Services
+@inject IHttpContextAccessor HttpContextAccessor
+@inject ServerSideTokenStore TokenStore
+
+<!DOCTYPE html>
+<html lang="en">
+   <!-- ... -->
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/custom-theme.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="MedicalBilling.BlazorServer.styles.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="@InteractiveServer" />
+</head>
+
+<body>
+    <Routes AccessToken="@AccessToken" @rendermode="@InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    public string? AccessToken { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContextAccessor.HttpContext != null)
+        {
+            // Try getting from Claims first (more reliable in some scenarios)
+            var user = HttpContextAccessor.HttpContext.User;
+            AccessToken = user.FindFirst("access_token")?.Value;
+
+            if (string.IsNullOrEmpty(AccessToken))
+            {
+                // Fallback to GetTokenAsync
+                AccessToken = await HttpContextAccessor.HttpContext.GetTokenAsync("access_token");
+            }
+            
+            Console.WriteLine($"[Blazor DEBUG] App.OnInitializedAsync - Retrieved Token: {(AccessToken == null ? "NULL" : "Value Present (Length: " + AccessToken.Length + ")")}");
+            
+            var username = HttpContextAccessor.HttpContext.User.Identity?.Name 
+                           ?? HttpContextAccessor.HttpContext.User.FindFirst("preferred_username")?.Value;
+
+            Console.WriteLine($"[Blazor DEBUG] App.OnInitializedAsync - Username: {username ?? "NULL"}");
+
+            if (!string.IsNullOrEmpty(AccessToken) && username != null)
+            {
+                TokenStore.SaveToken(username, AccessToken);
+            }
+        }
+        else 
+        {
+            Console.WriteLine("[Blazor DEBUG] App.OnInitializedAsync - HttpContext is NULL");
+        }
+    }
+}

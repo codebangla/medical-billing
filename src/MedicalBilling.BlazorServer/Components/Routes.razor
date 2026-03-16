@@ -1,0 +1,32 @@
+﻿<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>
+
+@using MedicalBilling.BlazorServer.Services
+@inject TokenProvider TokenProvider
+
+@code {
+    [Parameter]
+    public string? AccessToken { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Console.WriteLine($"[Blazor DEBUG] Routes.OnInitialized. Token: {(AccessToken == null ? "NULL" : "Value")}");
+        if (AccessToken != null)
+        {
+            TokenProvider.AccessToken = AccessToken;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        Console.WriteLine($"[Blazor DEBUG] Routes.OnParametersSet. Token: {(AccessToken == null ? "NULL" : "Value")}");
+        if (AccessToken != null)
+        {
+            TokenProvider.AccessToken = AccessToken;
+        }
+    }
+}

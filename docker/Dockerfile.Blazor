@@ -1,0 +1,51 @@
+# Multi-stage Dockerfile for Blazor Server
+# Optimized for production with security hardening
+
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copy solution and project files
+COPY ["MedicalBilling.sln", "./"]
+COPY ["src/MedicalBilling.Domain/MedicalBilling.Domain.csproj", "src/MedicalBilling.Domain/"]
+COPY ["src/MedicalBilling.Application/MedicalBilling.Application.csproj", "src/MedicalBilling.Application/"]
+COPY ["src/MedicalBilling.BlazorServer/MedicalBilling.BlazorServer.csproj", "src/MedicalBilling.BlazorServer/"]
+
+# Restore dependencies
+RUN dotnet restore "src/MedicalBilling.BlazorServer/MedicalBilling.BlazorServer.csproj"
+
+# Copy source code
+COPY . .
+
+# Build and publish
+WORKDIR "/src/src/MedicalBilling.BlazorServer"
+RUN dotnet build "MedicalBilling.BlazorServer.csproj" -c Release -o /app/build
+RUN dotnet publish "MedicalBilling.BlazorServer.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup --system --gid 1000 appuser && \
+    adduser --system --uid 1000 --ingroup appuser --shell /bin/sh appuser
+
+# Copy published app
+COPY --from=build /app/publish .
+
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose ports
+EXPOSE 8080
+EXPOSE 8081
+
+# Set environment variables
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Run the application
+ENTRYPOINT ["dotnet", "MedicalBilling.BlazorServer.dll"]

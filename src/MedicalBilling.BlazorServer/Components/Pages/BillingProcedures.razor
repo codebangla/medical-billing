@@ -1,0 +1,498 @@
+@page "/billing"
+@using MedicalBilling.Application.DTOs
+@rendermode InteractiveServer
+
+<PageTitle>Billing Procedures (Form 3 - AAV85)</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><span class="bi bi-file-earmark-medical"></span> Billing Procedures (Form 3 - AAV85)</h2>
+            <p class="text-muted">Manage medical billing procedures and Form 3 submissions</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="OpenCreateModal">
+                <span class="bi bi-plus-circle"></span> Add New Procedure
+            </button>
+        </div>
+    </div>
+
+    <!-- Coming Soon Alert -->
+    <div class="alert alert-warning" role="alert">
+        <h4 class="alert-heading"><span class="bi bi-exclamation-triangle"></span> Coming Soon!</h4>
+        <p>The Form 3 billing interface is being developed.</p>
+        <p class="mb-0">This will include support for German AAV85 billing procedures.</p>
+    </div>
+
+    <!-- Form 3 Features -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Form 3 Features:</h5>
+        </div>
+        <div class="card-body">
+            <ul class="mb-0">
+                <li>Patient selection and verification</li>
+                <li>Product/Service selection with EBM codes</li>
+                <li>Procedure date and details</li>
+                <li>Diagnosis codes</li>
+                <li>Fee calculation</li>
+                <li>Status tracking (Draft, Submitted, Approved, Rejected, Paid)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text"><span class="bi bi-search"></span></span>
+                <input type="text" class="form-control" placeholder="Search billing procedures..." 
+                       @bind="searchTerm" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                @if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                        <span class="bi bi-x"></span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading billing procedures...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <span class="bi bi-exclamation-triangle"></span> @errorMessage
+        </div>
+    }
+    else if (billingProcedures.Count == 0)
+    {
+        <div class="alert alert-info">
+            <span class="bi bi-info-circle"></span> No billing procedures found. Click "Add New Procedure" to create one.
+        </div>
+    }
+    else
+    {
+        <!-- Billing Procedures Table -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Patient</th>
+                        <th>Product/Service</th>
+                        <th>Procedure Date</th>
+                        <th>Quantity</th>
+                        <th>Unit Price</th>
+                        <th>Total Amount</th>
+                        <th>Form 3 Ref</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var procedure in billingProcedures)
+                    {
+                        <tr>
+                            <td><strong>@procedure.PatientName</strong></td>
+                            <td>@procedure.ProductName</td>
+                            <td>@procedure.ProcedureDate.ToShortDateString()</td>
+                            <td>@procedure.Quantity</td>
+                            <td>€@procedure.UnitPrice.ToString("N2")</td>
+                            <td><strong>€@procedure.TotalAmount.ToString("N2")</strong></td>
+                            <td><span class="badge bg-secondary">@procedure.Form3ReferenceNumber</span></td>
+                            <td>
+                                <span class="badge @GetStatusBadgeClass(procedure.Status)">
+                                    @procedure.Status
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenEditModal(procedure)">
+                                    <span class="bi bi-pencil"></span> Edit
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => OpenDeleteModal(procedure)">
+                                    <span class="bi bi-trash"></span> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <nav aria-label="Billing procedure pagination">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
+                    </li>
+                    @for (int i = 1; i <= totalPages; i++)
+                    {
+                        var pageNum = i;
+                        <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                            <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        </li>
+                    }
+                    <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditMode ? "Edit Billing Procedure" : "Create New Billing Procedure")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Patient *</label>
+                            <select class="form-select" @bind="currentProcedure.PatientId">
+                                <option value="0">-- Select Patient --</option>
+                                <!-- Patient options will be loaded from API -->
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Product/Service *</label>
+                            <select class="form-select" @bind="currentProcedure.ProductId">
+                                <option value="0">-- Select Product --</option>
+                                <!-- Product options will be loaded from API -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Procedure Date *</label>
+                            <input type="date" class="form-control" @bind="currentProcedure.ProcedureDate" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Quantity *</label>
+                            <input type="number" class="form-control" @bind="currentProcedure.Quantity" min="1" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Unit Price (€) *</label>
+                            <input type="number" step="0.01" class="form-control" @bind="currentProcedure.UnitPrice" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Total Amount (€)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="currentProcedure.TotalAmount" readonly />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Form 3 Reference Number *</label>
+                            <input type="text" class="form-control" @bind="currentProcedure.Form3ReferenceNumber" 
+                                   placeholder="e.g., F3-2024-001" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Status *</label>
+                            <select class="form-select" @bind="currentProcedure.Status">
+                                <option value="Pending">Pending</option>
+                                <option value="Submitted">Submitted</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Rejected">Rejected</option>
+                                <option value="Paid">Paid</option>
+                            </select>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(modalError))
+                    {
+                        <div class="alert alert-danger">@modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveProcedure" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        @(isEditMode ? "Update" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this billing procedure?</p>
+                    <p class="text-muted">Patient: <strong>@procedureToDelete?.PatientName</strong></p>
+                    <p class="text-muted">Reference: <strong>@procedureToDelete?.Form3ReferenceNumber</strong></p>
+                    <p class="text-muted">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BillingProcedureDto> billingProcedures = new();
+    private BillingProcedureDto currentProcedure = new();
+    private BillingProcedureDto? procedureToDelete;
+    
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+    private bool showModal = false;
+    private bool showDeleteModal = false;
+    private bool isEditMode = false;
+    
+    private string searchTerm = "";
+    private string errorMessage = "";
+    private string modalError = "";
+    
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount = 0;
+    private int totalPages = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Load billing procedures from API when backend is ready
+        // await LoadBillingProcedures();
+    }
+
+    private async Task LoadBillingProcedures()
+    {
+        isLoading = true;
+        errorMessage = "";
+        
+        try
+        {
+            // TODO: Call API service when backend is ready
+            // var result = await BillingProcedureService.GetPagedAsync(currentPage, pageSize, searchTerm);
+            // billingProcedures = result.Items;
+            // totalCount = result.TotalCount;
+            // totalPages = result.TotalPages;
+            
+            // For now, show empty state
+            billingProcedures = new List<BillingProcedureDto>();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading billing procedures: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Pending" => "bg-warning",
+            "Submitted" => "bg-info",
+            "Approved" => "bg-success",
+            "Rejected" => "bg-danger",
+            "Paid" => "bg-primary",
+            _ => "bg-secondary"
+        };
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadBillingProcedures();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        currentPage = 1;
+        await LoadBillingProcedures();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadBillingProcedures();
+    }
+
+    private void OpenCreateModal()
+    {
+        currentProcedure = new BillingProcedureDto 
+        { 
+            CreatedAt = DateTime.UtcNow,
+            ProcedureDate = DateTime.Now,
+            Status = "Pending",
+            Quantity = 1
+        };
+        isEditMode = false;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void OpenEditModal(BillingProcedureDto procedure)
+    {
+        currentProcedure = new BillingProcedureDto
+        {
+            Id = procedure.Id,
+            PatientId = procedure.PatientId,
+            PatientName = procedure.PatientName,
+            ProductId = procedure.ProductId,
+            ProductName = procedure.ProductName,
+            ProcedureDate = procedure.ProcedureDate,
+            Quantity = procedure.Quantity,
+            UnitPrice = procedure.UnitPrice,
+            TotalAmount = procedure.TotalAmount,
+            Form3ReferenceNumber = procedure.Form3ReferenceNumber,
+            Status = procedure.Status,
+            CreatedAt = procedure.CreatedAt
+        };
+        isEditMode = true;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentProcedure = new();
+        modalError = "";
+    }
+
+    private async Task SaveProcedure()
+    {
+        modalError = "";
+        
+        // Basic validation
+        if (currentProcedure.PatientId == 0)
+        {
+            modalError = "Please select a patient";
+            return;
+        }
+        
+        if (currentProcedure.ProductId == 0)
+        {
+            modalError = "Please select a product/service";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentProcedure.Form3ReferenceNumber))
+        {
+            modalError = "Form 3 Reference Number is required";
+            return;
+        }
+
+        if (currentProcedure.Quantity <= 0)
+        {
+            modalError = "Quantity must be greater than 0";
+            return;
+        }
+
+        if (currentProcedure.UnitPrice <= 0)
+        {
+            modalError = "Unit Price must be greater than 0";
+            return;
+        }
+
+        isSaving = true;
+        
+        try
+        {
+            // TODO: Call API service when backend is ready
+            // if (isEditMode)
+            // {
+            //     await BillingProcedureService.UpdateAsync(currentProcedure.Id, currentProcedure);
+            // }
+            // else
+            // {
+            //     await BillingProcedureService.CreateAsync(currentProcedure);
+            // }
+            
+            CloseModal();
+            await LoadBillingProcedures();
+        }
+        catch (Exception ex)
+        {
+            modalError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OpenDeleteModal(BillingProcedureDto procedure)
+    {
+        procedureToDelete = procedure;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        procedureToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (procedureToDelete == null) return;
+
+        isDeleting = true;
+        
+        try
+        {
+            // TODO: Call API service when backend is ready
+            // await BillingProcedureService.DeleteAsync(procedureToDelete.Id);
+            
+            CloseDeleteModal();
+            await LoadBillingProcedures();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting billing procedure: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}

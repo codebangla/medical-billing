@@ -1,0 +1,426 @@
+@page "/patients"
+@using MedicalBilling.Application.DTOs
+@using MedicalBilling.BlazorServer.Services
+@inject PatientService PatientService
+@rendermode InteractiveServer
+
+<PageTitle>Patient Management</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><span class="bi bi-people"></span> Patient Management</h2>
+            <p class="text-muted">Manage patient records and insurance information</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="OpenCreateModal">
+                <span class="bi bi-plus-circle"></span> Add New Patient
+            </button>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text"><span class="bi bi-search"></span></span>
+                <input type="text" class="form-control" placeholder="Search patients..." 
+                       @bind="searchTerm" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                @if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                        <span class="bi bi-x"></span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading patients...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <span class="bi bi-exclamation-triangle"></span> @errorMessage
+        </div>
+    }
+    else if (patients.Count == 0)
+    {
+        <div class="alert alert-info">
+            <span class="bi bi-info-circle"></span> No patients found. Click "Add New Patient" to create one.
+        </div>
+    }
+    else
+    {
+        <!-- Patients Table -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Date of Birth</th>
+                        <th>Insurance Number</th>
+                        <th>Insurance Provider</th>
+                        <th>Contact</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var patient in patients)
+                    {
+                        <tr>
+                            <td><strong>@patient.FirstName @patient.LastName</strong></td>
+                            <td>@patient.DateOfBirth.ToShortDateString()</td>
+                            <td><span class="badge bg-primary">@patient.InsuranceNumber</span></td>
+                            <td>@patient.InsuranceProvider</td>
+                            <td>@patient.ContactInfo</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenEditModal(patient)">
+                                    <span class="bi bi-pencil"></span> Edit
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => OpenDeleteModal(patient)">
+                                    <span class="bi bi-trash"></span> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <nav aria-label="Patient pagination">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
+                    </li>
+                    @for (int i = 1; i <= totalPages; i++)
+                    {
+                        var pageNum = i;
+                        <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                            <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        </li>
+                    }
+                    <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditMode ? "Edit Patient" : "Create New Patient")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" class="form-control" @bind="currentPatient.FirstName" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" class="form-control" @bind="currentPatient.LastName" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Date of Birth *</label>
+                            <input type="date" class="form-control" @bind="currentPatient.DateOfBirth" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Contact Info</label>
+                            <input type="text" class="form-control" @bind="currentPatient.ContactInfo" 
+                                   placeholder="Email or phone" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Insurance Number *</label>
+                            <input type="text" class="form-control" @bind="currentPatient.InsuranceNumber" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Insurance Provider *</label>
+                            <input type="text" class="form-control" @bind="currentPatient.InsuranceProvider" 
+                                   placeholder="e.g., AOK Bayern, TK" />
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(modalError))
+                    {
+                        <div class="alert alert-danger">@modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SavePatient" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        @(isEditMode ? "Update" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong>@patientToDelete?.FirstName @patientToDelete?.LastName</strong>?</p>
+                    <p class="text-muted">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PatientDto> patients = new();
+    private PatientDto currentPatient = new();
+    private PatientDto? patientToDelete;
+    
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+    private bool showModal = false;
+    private bool showDeleteModal = false;
+    private bool isEditMode = false;
+    
+    private string searchTerm = "";
+    private string errorMessage = "";
+    private string modalError = "";
+    
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount = 0;
+    private int totalPages = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPatients();
+    }
+
+    private async Task LoadPatients()
+    {
+        isLoading = true;
+        errorMessage = "";
+        
+        try
+        {
+            var result = await PatientService.GetPagedAsync(currentPage, pageSize, searchTerm);
+            patients = result.Items;
+            totalCount = result.TotalCount;
+            totalPages = result.TotalPages;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading patients: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadPatients();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        currentPage = 1;
+        await LoadPatients();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadPatients();
+    }
+
+    private void OpenCreateModal()
+    {
+        currentPatient = new PatientDto 
+        { 
+            CreatedAt = DateTime.UtcNow,
+            DateOfBirth = DateTime.Now.AddYears(-30)
+        };
+        isEditMode = false;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void OpenEditModal(PatientDto patient)
+    {
+        currentPatient = new PatientDto
+        {
+            Id = patient.Id,
+            FirstName = patient.FirstName,
+            LastName = patient.LastName,
+            DateOfBirth = patient.DateOfBirth,
+            InsuranceNumber = patient.InsuranceNumber,
+            InsuranceProvider = patient.InsuranceProvider,
+            ContactInfo = patient.ContactInfo,
+            CreatedAt = patient.CreatedAt
+        };
+        isEditMode = true;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentPatient = new();
+        modalError = "";
+    }
+
+    private async Task SavePatient()
+    {
+        modalError = "";
+        
+        if (string.IsNullOrWhiteSpace(currentPatient.FirstName))
+        {
+            modalError = "First Name is required";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentPatient.LastName))
+        {
+            modalError = "Last Name is required";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentPatient.InsuranceNumber))
+        {
+            modalError = "Insurance Number is required";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(currentPatient.InsuranceProvider))
+        {
+            modalError = "Insurance Provider is required";
+            return;
+        }
+
+        isSaving = true;
+        
+        try
+        {
+            bool success;
+            if (isEditMode)
+            {
+                success = await PatientService.UpdateAsync(currentPatient.Id, currentPatient);
+            }
+            else
+            {
+                var result = await PatientService.CreateAsync(currentPatient);
+                success = result.Success;
+                if (!success) modalError = result.Message;
+            }
+
+            if (success)
+            {
+                CloseModal();
+                await LoadPatients();
+            }
+            else if (string.IsNullOrEmpty(modalError))
+            {
+                modalError = "Failed to save patient. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            modalError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OpenDeleteModal(PatientDto patient)
+    {
+        patientToDelete = patient;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        patientToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (patientToDelete == null) return;
+
+        isDeleting = true;
+        
+        try
+        {
+            var success = await PatientService.DeleteAsync(patientToDelete.Id);
+            if (success)
+            {
+                CloseDeleteModal();
+                await LoadPatients();
+            }
+            else
+            {
+                errorMessage = "Failed to delete patient. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting patient: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}

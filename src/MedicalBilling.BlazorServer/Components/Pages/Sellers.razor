@@ -1,0 +1,399 @@
+@page "/sellers"
+@using MedicalBilling.Application.DTOs
+@using MedicalBilling.BlazorServer.Services
+@inject MedicalBilling.BlazorServer.Services.SellerService SellerService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@rendermode InteractiveServer
+
+<PageTitle>Seller Management</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><span class="bi bi-building"></span> Seller Management</h2>
+            <p class="text-muted">Manage medical service providers and sellers</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="OpenCreateModal">
+                <span class="bi bi-plus-circle"></span> Add New Seller
+            </button>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text"><span class="bi bi-search"></span></span>
+                <input type="text" class="form-control" placeholder="Search sellers..." 
+                       @bind="searchTerm" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                @if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                        <span class="bi bi-x"></span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading sellers...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <span class="bi bi-exclamation-triangle"></span> @errorMessage
+        </div>
+    }
+    else if (sellers.Count == 0)
+    {
+        <div class="alert alert-info">
+            <span class="bi bi-info-circle"></span> No sellers found. Click "Add New Seller" to create one.
+        </div>
+    }
+    else
+    {
+        <!-- Sellers Table -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>License Number</th>
+                        <th>Specialty</th>
+                        <th>Created</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var seller in sellers)
+                    {
+                        <tr>
+                            <td><strong>@seller.Name</strong></td>
+                            <td>@seller.Email</td>
+                            <td><span class="badge bg-secondary">@seller.LicenseNumber</span></td>
+                            <td>@seller.Specialty</td>
+                            <td>@seller.CreatedAt.ToShortDateString()</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenEditModal(seller)">
+                                    <span class="bi bi-pencil"></span> Edit
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => OpenDeleteModal(seller)">
+                                    <span class="bi bi-trash"></span> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <nav aria-label="Seller pagination">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
+                    </li>
+                    @for (int i = 1; i <= totalPages; i++)
+                    {
+                        var pageNum = i;
+                        <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                            <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        </li>
+                    }
+                    <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditMode ? "Edit Seller" : "Create New Seller")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name *</label>
+                        <input type="text" class="form-control" @bind="currentSeller.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email *</label>
+                        <input type="email" class="form-control" @bind="currentSeller.Email" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">License Number *</label>
+                        <input type="text" class="form-control" @bind="currentSeller.LicenseNumber" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Specialty</label>
+                        <input type="text" class="form-control" @bind="currentSeller.Specialty" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(modalError))
+                    {
+                        <div class="alert alert-danger">@modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveSeller" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        @(isEditMode ? "Update" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong>@sellerToDelete?.Name</strong>?</p>
+                    <p class="text-muted">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SellerDto> sellers = new();
+    private SellerDto currentSeller = new();
+    private SellerDto? sellerToDelete;
+    
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+    private bool showModal = false;
+    private bool showDeleteModal = false;
+    private bool isEditMode = false;
+    
+    private string searchTerm = "";
+    private string errorMessage = "";
+    private string modalError = "";
+    
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount = 0;
+    private int totalPages = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSellers();
+    }
+
+    private async Task LoadSellers()
+    {
+        isLoading = true;
+        errorMessage = "";
+        
+        try
+        {
+            var result = await SellerService.GetPagedAsync(currentPage, pageSize, searchTerm);
+            sellers = result.Items;
+            totalCount = result.TotalCount;
+            totalPages = result.TotalPages;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading sellers: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadSellers();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        currentPage = 1;
+        await LoadSellers();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadSellers();
+    }
+
+    private void OpenCreateModal()
+    {
+        currentSeller = new SellerDto { CreatedAt = DateTime.UtcNow };
+        isEditMode = false;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void OpenEditModal(SellerDto seller)
+    {
+        currentSeller = new SellerDto
+        {
+            Id = seller.Id,
+            Name = seller.Name,
+            Email = seller.Email,
+            LicenseNumber = seller.LicenseNumber,
+            Specialty = seller.Specialty,
+            CreatedAt = seller.CreatedAt
+        };
+        isEditMode = true;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentSeller = new();
+        modalError = "";
+    }
+
+    private async Task SaveSeller()
+    {
+        modalError = "";
+        
+        if (string.IsNullOrWhiteSpace(currentSeller.Name))
+        {
+            modalError = "Name is required";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentSeller.Email))
+        {
+            modalError = "Email is required";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentSeller.LicenseNumber))
+        {
+            modalError = "License Number is required";
+            return;
+        }
+
+        isSaving = true;
+        
+        try
+        {
+            bool success;
+            if (isEditMode)
+            {
+                success = await SellerService.UpdateAsync(currentSeller.Id, currentSeller);
+            }
+            else
+            {
+                var result = await SellerService.CreateAsync(currentSeller);
+                success = result.Success;
+                if (!success) modalError = result.Message;
+            }
+
+            if (success)
+            {
+                CloseModal();
+                await LoadSellers();
+            }
+            else if (string.IsNullOrEmpty(modalError))
+            {
+                modalError = "Failed to save seller. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            modalError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OpenDeleteModal(SellerDto seller)
+    {
+        sellerToDelete = seller;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        sellerToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (sellerToDelete == null) return;
+
+        isDeleting = true;
+        
+        try
+        {
+            var success = await SellerService.DeleteAsync(sellerToDelete.Id);
+            if (success)
+            {
+                CloseDeleteModal();
+                await LoadSellers();
+            }
+            else
+            {
+                errorMessage = "Failed to delete seller. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting seller: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}

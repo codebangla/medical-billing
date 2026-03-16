@@ -1,0 +1,6 @@
+@MedicalBilling.API_HostAddress = http://localhost:5236
+
+GET {{MedicalBilling.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

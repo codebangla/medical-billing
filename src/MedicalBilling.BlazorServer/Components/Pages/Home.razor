@@ -1,0 +1,88 @@
+﻿@page "/"
+
+<PageTitle>Medical Billing System</PageTitle>
+
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <h1 class="display-4 text-primary">Medical Billing System</h1>
+            <p class="lead text-muted">Form 3 (AAV85) German Medical Billing</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-people-fill text-primary" style="font-size: 3rem;"></i>
+                    <h5 class="card-title mt-3">Sellers</h5>
+                    <p class="card-text">Manage medical service providers and their information</p>
+                    <a href="sellers" class="btn btn-primary">Manage Sellers</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-box-seam-fill text-success" style="font-size: 3rem;"></i>
+                    <h5 class="card-title mt-3">Products</h5>
+                    <p class="card-text">Manage medical services and procedures with EBM codes</p>
+                    <a href="products" class="btn btn-success">Manage Products</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-person-badge-fill text-info" style="font-size: 3rem;"></i>
+                    <h5 class="card-title mt-3">Patients</h5>
+                    <p class="card-text">Manage patient records and insurance information</p>
+                    <a href="patients" class="btn btn-info">Manage Patients</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-file-earmark-medical-fill text-warning" style="font-size: 3rem;"></i>
+                    <h5 class="card-title mt-3">Billing</h5>
+                    <p class="card-text">Process billing procedures based on Form 3</p>
+                    <a href="billing" class="btn btn-warning">Process Billing</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">System Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Backend API</h6>
+                            <p class="text-muted">REST API running on port 5236</p>
+                            <a href="http://localhost:5236/swagger" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-box-arrow-up-right"></i> Open Swagger Documentation
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Features</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle-fill text-success"></i> Form 3 (AAV85) Support</li>
+                                <li><i class="bi bi-check-circle-fill text-success"></i> EBM Code Integration</li>
+                                <li><i class="bi bi-check-circle-fill text-success"></i> GDPR Compliant</li>
+                                <li><i class="bi bi-check-circle-fill text-success"></i> SQL Server Database</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

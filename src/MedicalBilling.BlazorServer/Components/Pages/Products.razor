@@ -1,0 +1,443 @@
+@page "/products"
+@using MedicalBilling.Application.DTOs
+@using MedicalBilling.BlazorServer.Services
+@inject ProductService ProductService
+@inject SellerService SellerService
+@rendermode InteractiveServer
+
+<PageTitle>Product Management</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2><span class="bi bi-box-seam"></span> Product Management</h2>
+            <p class="text-muted">Manage medical services and products</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="OpenCreateModal">
+                <span class="bi bi-plus-circle"></span> Add New Product
+            </button>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text"><span class="bi bi-search"></span></span>
+                <input type="text" class="form-control" placeholder="Search products..." 
+                       @bind="searchTerm" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                @if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                        <span class="bi bi-x"></span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading products...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <span class="bi bi-exclamation-triangle"></span> @errorMessage
+        </div>
+    }
+    else if (products.Count == 0)
+    {
+        <div class="alert alert-info">
+            <span class="bi bi-info-circle"></span> No products found. Click "Add New Product" to create one.
+        </div>
+    }
+    else
+    {
+        <!-- Products Table -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Service Name</th>
+                        <th>Service Code</th>
+                        <th>EBM Code</th>
+                        <th>Unit Price</th>
+                        <th>Seller</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in products)
+                    {
+                        <tr>
+                            <td><strong>@product.ServiceName</strong></td>
+                            <td><span class="badge bg-primary">@product.ServiceCode</span></td>
+                            <td><span class="badge bg-secondary">@product.EBMCode</span></td>
+                            <td><strong>€@product.UnitPrice.ToString("N2")</strong></td>
+                            <td>@GetSellerName(product.SellerId)</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenEditModal(product)">
+                                    <span class="bi bi-pencil"></span> Edit
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => OpenDeleteModal(product)">
+                                    <span class="bi bi-trash"></span> Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <nav aria-label="Product pagination">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
+                    </li>
+                    @for (int i = 1; i <= totalPages; i++)
+                    {
+                        var pageNum = i;
+                        <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                            <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        </li>
+                    }
+                    <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
+                    </li>
+                </ul>
+            </nav>
+        }
+    }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditMode ? "Edit Product" : "Create New Product")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Service Name *</label>
+                            <input type="text" class="form-control" @bind="currentProduct.ServiceName" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Service Code *</label>
+                            <input type="text" class="form-control" @bind="currentProduct.ServiceCode" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">EBM Code *</label>
+                            <input type="text" class="form-control" @bind="currentProduct.EBMCode" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Unit Price (€) *</label>
+                            <input type="number" step="0.01" class="form-control" @bind="currentProduct.UnitPrice" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Seller *</label>
+                        <select class="form-select" @bind="currentProduct.SellerId">
+                            <option value="0">-- Select Seller --</option>
+                            @foreach (var seller in sellers)
+                            {
+                                <option value="@seller.Id">@seller.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" rows="3" @bind="currentProduct.Description"></textarea>
+                    </div>
+                    @if (!string.IsNullOrEmpty(modalError))
+                    {
+                        <div class="alert alert-danger">@modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveProduct" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        @(isEditMode ? "Update" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete <strong>@productToDelete?.ServiceName</strong>?</p>
+                    <p class="text-muted">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteModal">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductDto> products = new();
+    private List<SellerDto> sellers = new();
+    private ProductDto currentProduct = new();
+    private ProductDto? productToDelete;
+    
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+    private bool showModal = false;
+    private bool showDeleteModal = false;
+    private bool isEditMode = false;
+    
+    private string searchTerm = "";
+    private string errorMessage = "";
+    private string modalError = "";
+    
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount = 0;
+    private int totalPages = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSellers();
+        await LoadProducts();
+    }
+
+    private async Task LoadSellers()
+    {
+        sellers = await SellerService.GetAllAsync();
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        errorMessage = "";
+        
+        try
+        {
+            var result = await ProductService.GetPagedAsync(currentPage, pageSize, searchTerm);
+            products = result.Items;
+            totalCount = result.TotalCount;
+            totalPages = result.TotalPages;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading products: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetSellerName(int sellerId)
+    {
+        return sellers.FirstOrDefault(s => s.Id == sellerId)?.Name ?? "Unknown";
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadProducts();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadProducts();
+    }
+
+    private void OpenCreateModal()
+    {
+        currentProduct = new ProductDto { CreatedAt = DateTime.UtcNow };
+        isEditMode = false;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void OpenEditModal(ProductDto product)
+    {
+        currentProduct = new ProductDto
+        {
+            Id = product.Id,
+            ServiceName = product.ServiceName,
+            ServiceCode = product.ServiceCode,
+            Description = product.Description,
+            UnitPrice = product.UnitPrice,
+            EBMCode = product.EBMCode,
+            SellerId = product.SellerId,
+            CreatedAt = product.CreatedAt
+        };
+        isEditMode = true;
+        modalError = "";
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentProduct = new();
+        modalError = "";
+    }
+
+    private async Task SaveProduct()
+    {
+        modalError = "";
+        
+        if (string.IsNullOrWhiteSpace(currentProduct.ServiceName))
+        {
+            modalError = "Service Name is required";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentProduct.ServiceCode))
+        {
+            modalError = "Service Code is required";
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(currentProduct.EBMCode))
+        {
+            modalError = "EBM Code is required";
+            return;
+        }
+
+        if (currentProduct.SellerId == 0)
+        {
+            modalError = "Please select a Seller";
+            return;
+        }
+
+        if (currentProduct.UnitPrice <= 0)
+        {
+            modalError = "Unit Price must be greater than 0";
+            return;
+        }
+
+        isSaving = true;
+        
+        try
+        {
+            bool success;
+            if (isEditMode)
+            {
+                success = await ProductService.UpdateAsync(currentProduct.Id, currentProduct);
+            }
+            else
+            {
+                var result = await ProductService.CreateAsync(currentProduct);
+                success = result.Success;
+                if (!success) modalError = result.Message;
+            }
+
+            if (success)
+            {
+                CloseModal();
+                await LoadProducts();
+            }
+            else if (string.IsNullOrEmpty(modalError))
+            {
+                modalError = "Failed to save product. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            modalError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OpenDeleteModal(ProductDto product)
+    {
+        productToDelete = product;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        productToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (productToDelete == null) return;
+
+        isDeleting = true;
+        
+        try
+        {
+            var success = await ProductService.DeleteAsync(productToDelete.Id);
+            if (success)
+            {
+                CloseDeleteModal();
+                await LoadProducts();
+            }
+            else
+            {
+                errorMessage = "Failed to delete product. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting product: {ex.Message}";
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}
