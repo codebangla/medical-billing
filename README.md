@@ -20,7 +20,7 @@ This project uses **Azure DevOps** for continuous integration and deployment:
 
 ### Successful Build & Commit Status
 
-![Azure repo commit with pipeline passed](images/Azure-repo-commit-pjg.jpg)
+![Azure repo commit with pipeline passed](images/Azure-repo-commit.jpg)
 
 _(Note: filename seems to have typo – probably `Azure-repo-commit-pipeline-passed.jpg` – fix if needed)_
 
